@@ -7,19 +7,54 @@ import { Wifi, Tv, Coffee, Car, Users, Bed } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 
+// Get API base URL from .env (Vite only)
+const API_BASE_URL = import.meta.env.VITE_RAILWAY_API_URL || '';
+
 import BookingDialog from './BookingDialog';
 import RoomImageCarousel from './RoomImageCarousel';
 
 const ConferenceRoomShowcase = () => {
   const queryClient = useQueryClient();
-  const { data: conferenceRoomsRaw, isLoading } = useQuery({
+  const { data: conferenceRoomsRaw, isLoading, error } = useQuery({
     queryKey: ['conference-rooms'],
     queryFn: async () => {
-      const res = await axios.get('/api/conferences');
-      return res.data || [];
+      // Always use the backend API URL from .env (VITE_RAILWAY_API_URL)
+      if (!API_BASE_URL) {
+        throw new Error('API base URL is not set. Please set VITE_RAILWAY_API_URL in your .env file and restart the dev server.');
+      }
+      const url = `https://${API_BASE_URL.replace(/^https?:\/\//, '')}/api/conferences`;
+      let res;
+      try {
+        res = await axios.get(url);
+      } catch (err) {
+        throw new Error('Unable to fetch conference rooms. Please check your network connection or try again later.');
+      }
+      if (!Array.isArray(res.data)) {
+        console.warn('conferences API did not return an array:', res.data);
+        return [];
+      }
+      console.log('conferences API returned:', res.data);
+      return res.data;
     }
   });
-  const conferenceRooms = Array.isArray(conferenceRoomsRaw) ? conferenceRoomsRaw : [];
+  // Normalize conference room data
+  const conferenceRooms = Array.isArray(conferenceRoomsRaw)
+    ? conferenceRoomsRaw.map((room) => ({
+        ...room,
+        price_per_hour: room.price_per_hour ?? room.price_per_night ?? 0,
+        images: room.images && Array.isArray(room.images) && room.images.length > 0
+          ? room.images
+          : room.image_url
+            ? [{ id: `${room.id}-img-0`, image_url: room.image_url, display_order: 0, is_primary: true }]
+            : [],
+        amenities: Array.isArray(room.amenities)
+          ? room.amenities
+          : typeof room.amenities === 'string'
+            ? room.amenities.split(',').map((a) => a.trim()).filter(Boolean)
+            : [],
+        is_available: typeof room.available === 'boolean' ? room.available : (room.is_available ?? true),
+      }))
+    : [];
 
   if (isLoading) {
     return (
@@ -43,6 +78,23 @@ const ConferenceRoomShowcase = () => {
     );
   }
 
+  if (error) {
+    return (
+      <section className="py-20 bg-gray-50">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-bold text-hotel-navy mb-6">
+              Conference & Event Spaces
+            </h2>
+            <p className="text-xl text-red-500 max-w-3xl mx-auto">
+              {(error as Error).message}
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="py-20 bg-gray-50">
       <div className="container mx-auto px-4">
@@ -55,7 +107,11 @@ const ConferenceRoomShowcase = () => {
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-8">
-          {conferenceRooms.map((room, index) => (
+          {conferenceRooms.length === 0 ? (
+            <div className="col-span-full text-center text-gray-500 py-8">
+              No conference rooms are currently available. Please check back later.
+            </div>
+          ) : conferenceRooms.map((room, index) => (
             <Card key={room.id} className={`overflow-hidden hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 animate-fade-in`} style={{animationDelay: `${index * 0.1}s`}}>
               <div className="relative">
                 <RoomImageCarousel 
@@ -68,9 +124,9 @@ const ConferenceRoomShowcase = () => {
                   fallbackImageUrl={room.image_url || "https://images.unsplash.com/photo-1515378791036-0648a3ef77b2?w=500&h=300&fit=crop"}
                   className="h-64"
                 />
-                <Badge className="absolute top-4 right-4 bg-hotel-gold text-hotel-navy font-semibold">
-                  KSh {(room.price_per_hour / 100).toLocaleString()}/hour
-                </Badge>
+                  <Badge className="absolute top-4 right-4 bg-hotel-gold text-hotel-navy font-semibold">
+                    KSh {(room.price_per_hour / 100).toLocaleString()}/hour
+                  </Badge>
               </div>
               <CardContent className="p-6">
                 <div className="flex justify-between items-start mb-4">

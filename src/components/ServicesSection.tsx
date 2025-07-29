@@ -19,20 +19,15 @@ import {
   Plane
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+// ...existing code...
 
 const ServicesSection = () => {
   const { data: services, isLoading } = useQuery({
     queryKey: ['services'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('services')
-        .select('*')
-        .eq('is_available', true)
-        .order('category', { ascending: true });
-      
-      if (error) throw error;
-      return data;
+      const axios = (await import('axios')).default;
+      const res = await axios.get('/api/services');
+      return res.data;
     }
   });
 
@@ -103,29 +98,34 @@ const ServicesSection = () => {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {services?.map((service, index) => {
-            const IconComponent = getServiceIcon(service.name, service.category);
-            
-            return (
-              <Card key={service.id} className={`text-center hover:shadow-xl transition-all duration-500 transform hover:-translate-y-2 border-0 bg-gradient-to-br from-white to-gray-50 animate-fade-in`} style={{animationDelay: `${index * 0.1}s`}}>
-                <CardContent className="p-6">
-                  <div className="inline-flex items-center justify-center w-16 h-16 bg-hotel-gold/10 rounded-full mb-4">
-                    <IconComponent className="h-8 w-8 text-hotel-gold" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-hotel-navy mb-3">{service.name}</h3>
-                  <p className="text-gray-600 text-sm leading-relaxed mb-3">{service.description}</p>
-                  {service.price && (
-                    <p className="text-hotel-gold font-semibold">
-                      KSh {(service.price / 100).toLocaleString()}
-                    </p>
-                  )}
-                  {!service.price && (
-                    <p className="text-green-600 font-semibold">Complimentary</p>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
+          {Array.isArray(services) && services.length > 0 ? (
+            services.map((service, index) => {
+              const IconComponent = getServiceIcon(service.name, service.category);
+              return (
+                <Card key={service.id} className={`text-center hover:shadow-xl transition-all duration-500 transform hover:-translate-y-2 border-0 bg-gradient-to-br from-white to-gray-50 animate-fade-in`} style={{animationDelay: `${index * 0.1}s`}}>
+                  <CardContent className="p-6">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-hotel-gold/10 rounded-full mb-4">
+                      <IconComponent className="h-8 w-8 text-hotel-gold" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-hotel-navy mb-3">{service.name}</h3>
+                    <p className="text-gray-600 text-sm leading-relaxed mb-3">{service.description}</p>
+                    {service.price && (
+                      <p className="text-hotel-gold font-semibold">
+                        KSh {(service.price / 100).toLocaleString()}
+                      </p>
+                    )}
+                    {!service.price && (
+                      <p className="text-green-600 font-semibold">Complimentary</p>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })
+          ) : (
+            <div className="col-span-full text-center text-gray-500 py-8">
+              No services available at this time.
+            </div>
+          )}
         </div>
         
         {/* Special Features Section */}

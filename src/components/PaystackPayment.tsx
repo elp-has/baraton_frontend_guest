@@ -64,19 +64,15 @@ const PaystackPayment = ({ amount, email, bookingData, onSuccess, disabled }: Pa
       // Get current origin for return URL
       const origin = window.location.origin;
 
-      // Call backend to initialize Paystack payment
-      const res = await axios.post(`${config.railway.url}/api/payments/initiate`, {
+      // Ensure the API base URL is clean (no protocol, no localhost)
+      let apiBase = config.railway.url || '';
+      apiBase = apiBase.replace(/^https?:\/\//, '');
+      // If user left protocol in .env, remove it. Always use https for production.
+      const paymentUrl = apiBase ? `https://${apiBase}/api/payments/initiate` : '/api/payments/initiate';
+      const res = await axios.post(paymentUrl, {
         amount,
         email: sanitizeInput(email.toLowerCase().trim()),
-        bookingData: {
-          ...bookingData,
-          room_name: sanitizeInput(bookingData.roomName || 'Hotel Room'),
-          room_id: bookingData.room_id,
-          guestName: sanitizeInput(bookingData.guestName || ''),
-          guestPhone: sanitizeInput(bookingData.guestPhone || '')
-        },
-        callback_url: `${origin}/payment-success`,
-        cancel_url: `${origin}/`
+        booking_id: bookingData.room_id
       });
       const data = res.data;
       if (data?.authorization_url) {

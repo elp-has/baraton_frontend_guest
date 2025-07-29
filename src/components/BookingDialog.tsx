@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -6,16 +5,33 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { CalendarDays, Users, Mail, Phone, User } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+// ...existing code...
 import { useToast } from '@/hooks/use-toast';
-import { Tables } from '@/integrations/supabase/types';
+// ...existing code...
 import PaystackPayment from './PaystackPayment';
-import RoomAvailabilityCalendar from './RoomAvailabilityCalendar';
+// ...existing code...
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { validateEmail, validatePhone, sanitizeInput, validateAmount, validateGuestCount, validateDateRange } from '@/utils/security';
 
-type Room = Tables<'rooms'>;
+// Define Room type locally since supabase/types is removed
+type Room = {
+  id: string;
+  name: string;
+  type: string;
+  description: string;
+  price_per_night: number;
+  price_per_hour?: number;
+  image_url?: string;
+  amenities?: string[];
+  capacity: number;
+  size_sqm?: number;
+  created_at?: string;
+  updated_at?: string;
+  is_available?: boolean;
+  room_number?: string;
+};
 
 interface BookingDialogProps {
   room: Room;
@@ -37,6 +53,9 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
     guestPhone: '',
     specialRequests: ''
   });
+
+  // Get API base URL from .env (Vite only)
+  const API_BASE_URL = import.meta.env.VITE_RAILWAY_API_URL || '';
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -89,6 +108,11 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
   };
 
   const calculateTotal = () => {
+    // Use price_per_hour for conference rooms, otherwise price_per_night
+    if (room.type?.toLowerCase().includes('conference')) {
+      // For conference, assume 1 hour booking for now (customize as needed)
+      return room.price_per_hour || room.price_per_night;
+    }
     const nights = calculateNights();
     return nights * room.price_per_night;
   };
@@ -116,38 +140,50 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
     }
 
     setIsLoading(true);
-    
     try {
       const totalAmount = calculateTotal();
-      
-      const { data, error } = await supabase
-        .from('bookings')
-        .insert({
-          room_id: room.id,
-          check_in_date: checkInDate!.toISOString().split('T')[0],
-          check_out_date: checkOutDate!.toISOString().split('T')[0],
-          guests: formData.guests,
-          total_amount: totalAmount,
-          guest_name: formData.guestName.trim(),
-          guest_email: formData.guestEmail.toLowerCase().trim(),
-          guest_phone: formData.guestPhone.trim() || null,
-          special_requests: formData.specialRequests.trim() || null,
-          status: 'confirmed'
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
+      // Map room type to lodging_id or conference_id
+      const isConference = room.type?.toLowerCase().includes('conference');
+      const bookingPayload: any = {
+        // user_id: get from context or backend session
+        start_date: checkInDate!.toISOString().split('T')[0],
+        end_date: checkOutDate!.toISOString().split('T')[0],
+        reference: `ref_${Date.now()}_${Math.floor(Math.random()*10000)}`,
+        guests: formData.guests,
+        guest_name: formData.guestName.trim(),
+        guest_email: formData.guestEmail.toLowerCase().trim(),
+        guest_phone: formData.guestPhone.trim() || null,
+        special_requests: formData.specialRequests.trim() || null,
+        // status: let backend default
+      };
+      if (isConference) {
+        bookingPayload.conference_id = room.id;
+      } else {
+        bookingPayload.lodging_id = room.id;
+      }
+      const bookingRes = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // send cookies for auth
+        body: JSON.stringify(bookingPayload)
+      });
+      if (!bookingRes.ok) throw new Error('Failed to create booking');
+      const bookingData = await bookingRes.json();
 
       // Create payment record
-      await supabase
-        .from('payments')
-        .insert({
-          booking_id: data.id,
+      const paymentUrl = API_BASE_URL
+        ? `https://${API_BASE_URL.replace(/^https?:\/\//, '')}/api/payments/initiate`
+        : '/api/payments/initiate';
+      const paymentRes = await fetch(paymentUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          booking_id: bookingData.id,
           amount: totalAmount,
-          status: 'completed',
-          currency: 'kes'
-        });
+          email: formData.guestEmail
+        })
+      });
+      if (!paymentRes.ok) throw new Error('Failed to create payment');
 
       toast({
         title: "Booking Confirmed!",
@@ -165,7 +201,6 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
       setCheckInDate(undefined);
       setCheckOutDate(undefined);
       setErrors({});
-
     } catch (error) {
       console.error('Error creating booking:', error);
       toast({
@@ -204,7 +239,7 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
       <DialogTrigger asChild>
         {children}
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold text-hotel-navy">
             Book {room.name}
@@ -221,19 +256,21 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
                     Check-in Date
                   </Label>
                   <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={`w-full justify-start text-left font-normal ${errors.dates ? 'border-red-500' : ''}`}
+                    <PopoverTrigger>
+                      <button
+                        type="button"
+                        className={`w-full justify-start text-left font-normal border rounded-md px-4 py-2 bg-white ${errors.dates ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-hotel-gold`}
                       >
                         {checkInDate ? format(checkInDate, "PPP") : "Select date"}
-                      </Button>
+                      </button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
-                      <RoomAvailabilityCalendar
-                        roomId={room.id}
-                        onDateSelect={setCheckInDate}
-                        selectedDate={checkInDate}
+                      <Calendar
+                        mode="single"
+                        selected={checkInDate}
+                        onSelect={(date) => setCheckInDate(date as Date)}
+                        disabled={(date) => date < new Date()}
+                        initialFocus
                       />
                     </PopoverContent>
                   </Popover>
@@ -245,21 +282,21 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
                     Check-out Date
                   </Label>
                   <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={`w-full justify-start text-left font-normal ${errors.dates ? 'border-red-500' : ''}`}
+                    <PopoverTrigger>
+                      <button
+                        type="button"
+                        className={`w-full justify-start text-left font-normal border rounded-md px-4 py-2 bg-white ${errors.dates ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-hotel-gold`}
                       >
                         {checkOutDate ? format(checkOutDate, "PPP") : "Select date"}
-                      </Button>
+                      </button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
-                      <RoomAvailabilityCalendar
-                        roomId={room.id}
-                        onDateSelect={setCheckOutDate}
-                        selectedDate={checkOutDate}
-                        isCheckOut={true}
-                        checkInDate={checkInDate?.toISOString().split('T')[0]}
+                      <Calendar
+                        mode="single"
+                        selected={checkOutDate}
+                        onSelect={(date) => setCheckOutDate(date as Date)}
+                        disabled={(date) => !checkInDate || date <= checkInDate}
+                        initialFocus
                       />
                     </PopoverContent>
                   </Popover>

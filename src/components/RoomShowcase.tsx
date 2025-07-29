@@ -1,22 +1,8 @@
 // Room type definition for type safety
-export type RoomType =
-  | "standard"
-  | "deluxe"
-  | "executive_suite"
-  | "conference_suite"
-  | "superior"
-  | "suite"
-  | "presidential_suite"
-  | "small_meeting_room"
-  | "large_conference_hall"
-  | "boardroom"
-  | "training_room"
-  | "seminar_hall";
-
 type Room = {
   id: string;
   name: string;
-  type: RoomType;
+  type: string;
   description: string;
   price_per_night: number;
   image_url?: string;
@@ -37,26 +23,46 @@ import { Badge } from '@/components/ui/badge';
 import { Wifi, Tv, Coffee, Car, Users, Bed } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
+
+// Get API base URL from .env (Vite only)
+const API_BASE_URL = import.meta.env.VITE_RAILWAY_API_URL || '';
 import BookingDialog from './BookingDialog';
-import RoomAvailabilityInfo from './RoomAvailabilityInfo';
+// ...existing code...
 import RoomImageCarousel from './RoomImageCarousel';
 
 const RoomShowcase = () => {
   const queryClient = useQueryClient();
   
-  const { data: rooms, isLoading } = useQuery<Room[]>({
+  const { data: rooms, isLoading, error } = useQuery<Room[]>({
     queryKey: ['rooms'],
     queryFn: async () => {
-      const res = await axios.get('/api/lodgings');
+      // Always use the backend API URL from .env (VITE_RAILWAY_API_URL)
+      if (!API_BASE_URL) {
+        throw new Error('API base URL is not set. Please set VITE_RAILWAY_API_URL in your .env file and restart the dev server.');
+      }
+      const url = `https://${API_BASE_URL.replace(/^https?:\/\//, '')}/api/lodgings`;
+      let res;
+      try {
+        res = await axios.get(url);
+      } catch (err) {
+        // Network error handling
+        throw new Error('Unable to fetch rooms. Please check your network connection or try again later.');
+      }
+      // Ensure res.data is an array before processing
+      if (!Array.isArray(res.data)) {
+        console.warn('lodgings API did not return an array:', res.data);
+        return [];
+      }
+      console.log('lodgings API returned:', res.data);
       // Group rooms by type and return one representative room per type
-      const roomsByType = res.data?.reduce((acc: any, room: any) => {
+      const roomsByType = res.data.reduce((acc: any, room: any) => {
         if (!acc[room.type]) {
           acc[room.type] = room;
         }
         return acc;
       }, {} as Record<string, any>);
       const uniqueRooms = roomsByType ? Object.values(roomsByType) : [];
-      // Ensure all required fields for Room type are present
+      // Ensure all required fields for Room type are present and normalize amenities/images and available field
       return uniqueRooms.map((room: any) => ({
         id: room.id,
         name: room.name,
@@ -64,13 +70,21 @@ const RoomShowcase = () => {
         description: room.description,
         price_per_night: room.price_per_night,
         image_url: room.image_url,
-        images: room.images || [],
-        amenities: room.amenities || [],
+        images: room.images && Array.isArray(room.images) && room.images.length > 0
+          ? room.images
+          : room.image_url
+            ? [{ id: `${room.id}-img-0`, image_url: room.image_url, display_order: 0, is_primary: true }]
+            : [],
+        amenities: Array.isArray(room.amenities)
+          ? room.amenities
+          : typeof room.amenities === 'string'
+            ? room.amenities.split(',').map((a: string) => a.trim()).filter(Boolean)
+            : [],
         capacity: room.capacity,
         size_sqm: room.size_sqm,
         created_at: room.created_at || '',
         updated_at: room.updated_at || '',
-        is_available: room.is_available ?? true,
+        is_available: typeof room.available === 'boolean' ? room.available : (room.is_available ?? true),
         room_number: room.room_number || '',
       })) as Room[];
     }
@@ -94,6 +108,41 @@ const RoomShowcase = () => {
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className="bg-gray-200 animate-pulse h-96 rounded-lg"></div>
             ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section className="py-20 bg-gray-50">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-bold text-hotel-navy mb-6">
+              Exceptional Accommodations
+            </h2>
+            <p className="text-xl text-red-500 max-w-3xl mx-auto">
+              {(error as Error).message}
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // Show a message if no rooms are available
+  if (!rooms || rooms.length === 0) {
+    return (
+      <section className="py-20 bg-gray-50">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-bold text-hotel-navy mb-6 animate-fade-in">
+              Exceptional Accommodations
+            </h2>
+            <p className="text-xl text-gray-500 max-w-3xl mx-auto animate-slide-in">
+              No rooms are currently available. Please check back later.
+            </p>
           </div>
         </div>
       </section>
@@ -142,7 +191,7 @@ const RoomShowcase = () => {
                   </div>
                 </div>
 
-                <RoomAvailabilityInfo roomType={room.type as any} />
+                {/* RoomAvailabilityInfo removed */}
                 
                 <p className="text-gray-600 mb-4 mt-4">{room.description}</p>
                 
