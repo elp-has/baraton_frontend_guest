@@ -129,6 +129,7 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
     }
   };
 
+  // Booking is created first, then payment is initiated with the booking id
   const handleBookingSuccess = async () => {
     if (!validateForm()) {
       toast({
@@ -145,7 +146,6 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
       // Map room type to lodging_id or conference_id
       const isConference = room.type?.toLowerCase().includes('conference');
       const bookingPayload: any = {
-        // user_id: get from context or backend session
         start_date: checkInDate!.toISOString().split('T')[0],
         end_date: checkOutDate!.toISOString().split('T')[0],
         reference: `ref_${Date.now()}_${Math.floor(Math.random()*10000)}`,
@@ -154,23 +154,22 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
         guest_email: formData.guestEmail.toLowerCase().trim(),
         guest_phone: formData.guestPhone.trim() || null,
         special_requests: formData.specialRequests.trim() || null,
-        // status: let backend default
       };
       if (isConference) {
         bookingPayload.conference_id = room.id;
       } else {
         bookingPayload.lodging_id = room.id;
       }
+      // 1. Create booking first
       const bookingRes = await fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', // send cookies for auth
         body: JSON.stringify(bookingPayload)
       });
       if (!bookingRes.ok) throw new Error('Failed to create booking');
       const bookingData = await bookingRes.json();
 
-      // Create payment record
+      // 2. Initiate payment with booking id
       const paymentUrl = API_BASE_URL
         ? `https://${API_BASE_URL.replace(/^https?:\/\//, '')}/api/payments/initiate`
         : '/api/payments/initiate';
@@ -179,15 +178,15 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           booking_id: bookingData.id,
-          amount: totalAmount,
+          amount: totalAmount, // amount in cents
           email: formData.guestEmail
         })
       });
       if (!paymentRes.ok) throw new Error('Failed to create payment');
 
       toast({
-        title: "Booking Confirmed!",
-        description: "Your booking has been confirmed and payment processed successfully.",
+        title: "Booking Created!",
+        description: "Your booking has been created. Please complete payment to confirm.",
       });
 
       setIsOpen(false);
