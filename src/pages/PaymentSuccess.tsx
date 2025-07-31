@@ -24,8 +24,8 @@ const PaymentSuccess = () => {
         return;
       }
       try {
-        // Call backend to verify payment and get booking details
-        const res = await axios.get(`${config.railway.url}/api/payments/verify?reference=${encodeURIComponent(reference)}`);
+        // Call backend to verify payment and get booking details (use route param)
+        const res = await axios.get(`${config.railway.url}/api/payments/verify/${encodeURIComponent(reference)}`);
         const data = res.data;
         if (data && data.booking) {
           setBooking(data.booking);

@@ -206,9 +206,22 @@ const RoomShowcase = () => {
                               }}
                               >
                               {/* Use Button as the trigger child, not as a wrapper */}
-                              <span className="w-full block">
-                                <Button className="w-full bg-hotel-navy hover:bg-hotel-charcoal text-white py-2 rounded-lg text-xs transition-all duration-300">Book Now</Button>
-                              </span>
+                              <div
+                                className="w-full bg-hotel-navy hover:bg-hotel-charcoal text-white py-2 rounded-lg text-xs font-medium text-center cursor-pointer transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-hotel-gold"
+                                role="button"
+                                tabIndex={0}
+                                onClick={e => {
+                                  // Let BookingDialog handle opening
+                                }}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    // Let BookingDialog handle opening
+                                  }
+                                }}
+                              >
+                                Book Now
+                              </div>
                             </BookingDialog>
                           </CardContent>
                         </Card>
