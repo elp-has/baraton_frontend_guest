@@ -167,7 +167,7 @@ const RoomShowcase = () => {
                             <RoomImageCarousel 
                               images={room.image_urls.map((url, idx) => ({ id: `${room.id}-img-${idx}`, image_url: url, display_order: idx, is_primary: idx === 0 }))}
                               fallbackImageUrl={room.image_urls[0] || "https://images.unsplash.com/photo-1611892440504-42a792e24d32?w=500&h=300&fit=crop"}
-                              className="h-40 md:h-48 lg:h-40"
+                              className="w-full h-44 md:h-52 lg:h-44 object-cover rounded-t-lg overflow-hidden"
                             />
                             <Badge className="absolute top-2 right-2 bg-hotel-gold text-hotel-navy font-semibold text-xs px-2 py-1">
                               {room.price}/night
@@ -198,10 +198,17 @@ const RoomShowcase = () => {
                               <Coffee className="h-4 w-4 text-hotel-gold" />
                               <Car className="h-4 w-4 text-hotel-gold" />
                             </div>
-                            <BookingDialog room={room as any}>
-                              <Button className="w-full bg-hotel-navy hover:bg-hotel-charcoal text-white py-2 rounded-lg text-xs transition-all duration-300">
-                                Book Now
-                              </Button>
+                            <BookingDialog 
+                              room={{
+                                ...room,
+                                price_per_night: room.price ? room.price * 100 : 0,
+                                // Optionally add price_per_hour if needed for conference rooms
+                              }}
+                              >
+                              {/* Use Button as the trigger child, not as a wrapper */}
+                              <span className="w-full block">
+                                <Button className="w-full bg-hotel-navy hover:bg-hotel-charcoal text-white py-2 rounded-lg text-xs transition-all duration-300">Book Now</Button>
+                              </span>
                             </BookingDialog>
                           </CardContent>
                         </Card>
