@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { CalendarDays, Users, Mail, Phone, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import PaystackPayment from './PaystackPayment';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
@@ -57,27 +58,27 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
     if (!checkInDate || !checkOutDate) {
       newErrors.dates = 'Please select both check-in and check-out dates';
     } else if (!validateDateRange(checkInDate.toISOString().split('T')[0], checkOutDate.toISOString().split('T')[0])) {
-      newErrors.dates = 'Invalid date range. Check-in must be today or later, check-out must be after check-in';
+      newErrors.dates = 'Invalid date range';
     }
 
     if (!formData.guestName.trim()) {
       newErrors.guestName = 'Guest name is required';
     } else if (formData.guestName.trim().length < 2) {
-      newErrors.guestName = 'Guest name must be at least 2 characters';
+      newErrors.guestName = 'Name must be at least 2 characters';
     }
 
     if (!formData.guestEmail.trim()) {
-      newErrors.guestEmail = 'Email address is required';
+      newErrors.guestEmail = 'Email is required';
     } else if (!validateEmail(formData.guestEmail)) {
-      newErrors.guestEmail = 'Please enter a valid email address';
+      newErrors.guestEmail = 'Invalid email';
     }
 
     if (formData.guestPhone && !validatePhone(formData.guestPhone)) {
-      newErrors.guestPhone = 'Please enter a valid Kenyan phone number';
+      newErrors.guestPhone = 'Invalid phone number';
     }
 
-    if (!validateGuestCount(formData.guests, room.capacity)) {
-      newErrors.guests = `Number of guests must be between 1 and ${room.capacity}`;
+    if (!validateGuestCount(Number(formData.guests), room.capacity)) {
+      newErrors.guests = `Guests must be 1 to ${room.capacity}`;
     }
 
     const totalAmount = calculateTotal();
@@ -99,15 +100,15 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
     if (room.type?.toLowerCase().includes('conference')) {
       return room.price_per_hour || room.price_per_night;
     }
-    const nights = calculateNights();
-    return nights * room.price_per_night;
+    return calculateNights() * room.price_per_night;
   };
 
   const handleInputChange = (field: string, value: string | number) => {
     setFormData(prev => ({
       ...prev,
-      [field]: typeof value === 'string' ? sanitizeInput(value) : value
+      [field]: field === 'guests' ? Number(value) : sanitizeInput(String(value))
     }));
+
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
@@ -117,7 +118,7 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
     if (!validateForm()) {
       toast({
         title: "Validation Error",
-        description: "Please correct the errors in the form before proceeding.",
+        description: "Please fix the form errors.",
         variant: "destructive",
       });
       return;
@@ -131,17 +132,13 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
         start_date: checkInDate!.toISOString().split('T')[0],
         end_date: checkOutDate!.toISOString().split('T')[0],
         reference: `ref_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
-        guests: formData.guests,
+        guests: Number(formData.guests),
         guest_name: formData.guestName.trim(),
         guest_email: formData.guestEmail.toLowerCase().trim(),
         guest_phone: formData.guestPhone.trim() || null,
         special_requests: formData.specialRequests.trim() || null,
+        ...(isConference ? { conference_id: room.id } : { lodging_id: room.id })
       };
-      if (isConference) {
-        bookingPayload.conference_id = room.id;
-      } else {
-        bookingPayload.lodging_id = room.id;
-      }
 
       const bookingRes = await fetch('/api/bookings', {
         method: 'POST',
@@ -164,57 +161,37 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
           email: formData.guestEmail
         })
       });
+      if (!paymentRes.ok) throw new Error('Payment initiation failed');
 
-      if (!paymentRes.ok) throw new Error('Failed to create payment');
-      const paymentData = await paymentRes.json();
+      toast({ title: "Booking Successful", description: "Complete payment to confirm your booking." });
 
-      toast({
-        title: "Booking Created!",
-        description: "Redirecting to Paystack for payment...",
-      });
-
-      window.location.href = paymentData.authorization_url;
+      setIsOpen(false);
+      setFormData({ guests: 1, guestName: '', guestEmail: '', guestPhone: '', specialRequests: '' });
+      setCheckInDate(undefined);
+      setCheckOutDate(undefined);
+      setErrors({});
     } catch (error) {
-      console.error('Error:', error);
-      toast({
-        title: "Error",
-        description: "An error occurred. Please try again.",
-        variant: "destructive",
-      });
+      console.error('Booking error:', error);
+      toast({ title: "Booking Error", description: "Please try again or contact support.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const isFormValid = () => {
-    return checkInDate &&
-      checkOutDate &&
-      formData.guestName.trim() &&
-      validateEmail(formData.guestEmail) &&
-      calculateNights() > 0 &&
-      Object.keys(errors).length === 0;
-  };
-
-  const bookingData = {
-    room_id: room.id,
-    roomName: room.name,
-    guestName: formData.guestName.trim(),
-    guestEmail: formData.guestEmail.toLowerCase().trim(),
-    guestPhone: formData.guestPhone.trim(),
-    checkInDate: checkInDate?.toISOString().split('T')[0],
-    checkOutDate: checkOutDate?.toISOString().split('T')[0],
-    guests: formData.guests,
-    specialRequests: formData.specialRequests.trim()
-  };
+  const isFormValid = () =>
+    checkInDate &&
+    checkOutDate &&
+    formData.guestName.trim() &&
+    validateEmail(formData.guestEmail) &&
+    calculateNights() > 0 &&
+    Object.keys(errors).length === 0;
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold text-hotel-navy">
-            Book {room.name}
-          </DialogTitle>
+          <DialogTitle className="text-2xl font-bold text-hotel-navy">Book {room.name}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -222,106 +199,93 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="checkIn">Check-in Date</Label>
+                  <Label>Check-in Date</Label>
                   <Popover>
-                    <PopoverTrigger asChild>
-                      <button type="button" className={`w-full justify-start text-left font-normal border rounded-md px-4 py-2 bg-white ${errors.dates ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2`}>
-                        {checkInDate ? format(checkInDate, "PPP") : "Select date"}
+                    <PopoverTrigger>
+                      <button className="w-full text-left px-4 py-2 border rounded-md bg-white">
+                        {checkInDate ? format(checkInDate, 'PPP') : 'Select date'}
                       </button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
                       <Calendar
                         mode="single"
                         selected={checkInDate}
-                        onSelect={(date) => setCheckInDate(date as Date)}
-                        disabled={(date) => date < new Date()}
-                        initialFocus
+                        onSelect={setCheckInDate}
+                        disabled={date => date < new Date()}
                       />
                     </PopoverContent>
                   </Popover>
                 </div>
+
                 <div>
-                  <Label htmlFor="checkOut">Check-out Date</Label>
+                  <Label>Check-out Date</Label>
                   <Popover>
-                    <PopoverTrigger asChild>
-                      <button type="button" className={`w-full justify-start text-left font-normal border rounded-md px-4 py-2 bg-white ${errors.dates ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2`}>
-                        {checkOutDate ? format(checkOutDate, "PPP") : "Select date"}
+                    <PopoverTrigger>
+                      <button className="w-full text-left px-4 py-2 border rounded-md bg-white">
+                        {checkOutDate ? format(checkOutDate, 'PPP') : 'Select date'}
                       </button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
                       <Calendar
                         mode="single"
                         selected={checkOutDate}
-                        onSelect={(date) => setCheckOutDate(date as Date)}
-                        disabled={(date) => !checkInDate || date <= checkInDate}
-                        initialFocus
+                        onSelect={setCheckOutDate}
+                        disabled={date => !checkInDate || date <= checkInDate}
                       />
                     </PopoverContent>
                   </Popover>
                 </div>
               </div>
-              {errors.dates && <p className="text-sm text-red-500">{errors.dates}</p>}
+              {errors.dates && <p className="text-red-500 text-sm">{errors.dates}</p>}
 
               <div>
-                <Label htmlFor="guests">Number of Guests</Label>
+                <Label>Number of Guests</Label>
                 <Input
-                  id="guests"
                   type="number"
                   min="1"
                   max={room.capacity}
                   value={formData.guests}
-                  onChange={(e) => handleInputChange('guests', parseInt(e.target.value))}
+                  onChange={e => handleInputChange('guests', e.target.value)}
                   className={errors.guests ? 'border-red-500' : ''}
-                  required
                 />
                 {errors.guests && <p className="text-sm text-red-500">{errors.guests}</p>}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="guestName">Full Name *</Label>
+                  <Label>Full Name</Label>
                   <Input
-                    id="guestName"
                     value={formData.guestName}
-                    onChange={(e) => handleInputChange('guestName', e.target.value)}
+                    onChange={e => handleInputChange('guestName', e.target.value)}
                     className={errors.guestName ? 'border-red-500' : ''}
-                    required
                   />
                   {errors.guestName && <p className="text-sm text-red-500">{errors.guestName}</p>}
                 </div>
+
                 <div>
-                  <Label htmlFor="guestEmail">Email Address *</Label>
+                  <Label>Email</Label>
                   <Input
-                    id="guestEmail"
-                    type="email"
                     value={formData.guestEmail}
-                    onChange={(e) => handleInputChange('guestEmail', e.target.value)}
+                    onChange={e => handleInputChange('guestEmail', e.target.value)}
                     className={errors.guestEmail ? 'border-red-500' : ''}
-                    required
                   />
                   {errors.guestEmail && <p className="text-sm text-red-500">{errors.guestEmail}</p>}
                 </div>
               </div>
 
               <div>
-                <Label htmlFor="guestPhone">Phone Number (Optional)</Label>
+                <Label>Phone (Optional)</Label>
                 <Input
-                  id="guestPhone"
-                  type="tel"
                   value={formData.guestPhone}
-                  onChange={(e) => handleInputChange('guestPhone', e.target.value)}
-                  placeholder="e.g., +254712345678 or 0712345678"
-                  className={errors.guestPhone ? 'border-red-500' : ''}
+                  onChange={e => handleInputChange('guestPhone', e.target.value)}
                 />
-                {errors.guestPhone && <p className="text-sm text-red-500">{errors.guestPhone}</p>}
               </div>
 
               <div>
-                <Label htmlFor="specialRequests">Special Requests</Label>
+                <Label>Special Requests</Label>
                 <Textarea
-                  id="specialRequests"
                   value={formData.specialRequests}
-                  onChange={(e) => handleInputChange('specialRequests', e.target.value)}
+                  onChange={e => handleInputChange('specialRequests', e.target.value)}
                   rows={3}
                 />
               </div>
@@ -330,36 +294,32 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
             <div className="space-y-4">
               {calculateNights() > 0 && (
                 <div className="bg-hotel-cream p-4 rounded-lg">
-                  <h4 className="font-semibold text-hotel-navy mb-2">Booking Summary</h4>
-                  <div className="space-y-1 text-sm">
+                  <h4 className="font-semibold mb-2">Booking Summary</h4>
+                  <div className="text-sm space-y-1">
                     <div className="flex justify-between">
-                      <span>Room:</span>
-                      <span>{room.name}</span>
+                      <span>Room:</span><span>{room.name}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Nights:</span>
-                      <span>{calculateNights()}</span>
+                      <span>Nights:</span><span>{calculateNights()}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Rate per night:</span>
-                      <span>KSh {(room.price_per_night / 100).toLocaleString()}</span>
+                      <span>Rate:</span><span>KSh {(room.price_per_night / 100).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between font-semibold border-t pt-1">
-                      <span>Total:</span>
-                      <span>KSh {(calculateTotal() / 100).toLocaleString()}</span>
+                      <span>Total:</span><span>KSh {(calculateTotal() / 100).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
               )}
 
               {isFormValid() && (
-                <Button
-                  className="w-full bg-hotel-gold text-white hover:bg-hotel-gold/90"
-                  onClick={handleBookingSuccess}
+                <PaystackPayment
+                  amount={calculateTotal()}
+                  email={formData.guestEmail}
+                  bookingData={formData}
+                  onSuccess={handleBookingSuccess}
                   disabled={isLoading}
-                >
-                  {isLoading ? "Processing..." : "Confirm Booking & Pay with Paystack"}
-                </Button>
+                />
               )}
             </div>
           </div>
