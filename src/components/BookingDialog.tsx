@@ -76,9 +76,7 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
       newErrors.guestPhone = 'Please enter a valid Kenyan phone number';
     }
 
-    if (!validateGuestCount(formData.guests, room.capacity)) {
-      newErrors.guests = `Number of guests must be between 1 and ${room.capacity}`;
-    }
+   
 
     const totalAmount = calculateTotal();
     if (!validateAmount(totalAmount)) {
