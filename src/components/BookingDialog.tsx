@@ -1,21 +1,43 @@
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { CalendarDays, Users, Mail, Phone, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import PaystackPayment from './PaystackPayment';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
-import { validateEmail, validatePhone, sanitizeInput, validateAmount, validateDateRange } from '@/utils/security';
+import { validateEmail, validatePhone, sanitizeInput, validateAmount, validateGuestCount, validateDateRange } from '@/utils/security';
 
-const BookingDialog = ({ room, children }: { room: any; children: React.ReactNode }) => {
+type Room = {
+  id: string;
+  name: string;
+  type: string;
+  description: string;
+  price_per_night: number;
+  price_per_hour?: number;
+  image_url?: string;
+  amenities?: string[];
+  capacity: number;
+  size_sqm?: number;
+  created_at?: string;
+  updated_at?: string;
+  is_available?: boolean;
+  room_number?: string;
+};
+
+interface BookingDialogProps {
+  room: Room;
+  children: React.ReactNode;
+}
+
+const BookingDialog = ({ room, children }: BookingDialogProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [checkInDate, setCheckInDate] = useState<Date | undefined>();
-  const [checkOutDate, setCheckOutDate] = useState<Date | undefined>();
+  const [checkInDate, setCheckInDate] = useState<Date>();
+  const [checkOutDate, setCheckOutDate] = useState<Date>();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
 
@@ -29,7 +51,7 @@ const BookingDialog = ({ room, children }: { room: any; children: React.ReactNod
 
   const API_BASE_URL = import.meta.env.VITE_RAILWAY_API_URL || '';
 
-  const validateForm = () => {
+  const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
     if (!checkInDate || !checkOutDate) {
@@ -52,6 +74,10 @@ const BookingDialog = ({ room, children }: { room: any; children: React.ReactNod
 
     if (formData.guestPhone && !validatePhone(formData.guestPhone)) {
       newErrors.guestPhone = 'Please enter a valid Kenyan phone number';
+    }
+
+    if (!validateGuestCount(formData.guests, room.capacity)) {
+      newErrors.guests = `Number of guests must be between 1 and ${room.capacity}`;
     }
 
     const totalAmount = calculateTotal();
@@ -82,7 +108,6 @@ const BookingDialog = ({ room, children }: { room: any; children: React.ReactNod
       ...prev,
       [field]: typeof value === 'string' ? sanitizeInput(value) : value
     }));
-
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
@@ -102,18 +127,21 @@ const BookingDialog = ({ room, children }: { room: any; children: React.ReactNod
     try {
       const totalAmount = calculateTotal();
       const isConference = room.type?.toLowerCase().includes('conference');
-
-      const bookingPayload = {
+      const bookingPayload: any = {
         start_date: checkInDate!.toISOString().split('T')[0],
         end_date: checkOutDate!.toISOString().split('T')[0],
         reference: `ref_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
-        guests: Number(formData.guests),
+        guests: formData.guests,
         guest_name: formData.guestName.trim(),
         guest_email: formData.guestEmail.toLowerCase().trim(),
         guest_phone: formData.guestPhone.trim() || null,
         special_requests: formData.specialRequests.trim() || null,
-        ...(isConference ? { conference_id: room.id } : { lodging_id: room.id })
       };
+      if (isConference) {
+        bookingPayload.conference_id = room.id;
+      } else {
+        bookingPayload.lodging_id = room.id;
+      }
 
       const bookingRes = await fetch('/api/bookings', {
         method: 'POST',
@@ -136,23 +164,21 @@ const BookingDialog = ({ room, children }: { room: any; children: React.ReactNod
           email: formData.guestEmail
         })
       });
+
       if (!paymentRes.ok) throw new Error('Failed to create payment');
+      const paymentData = await paymentRes.json();
 
       toast({
         title: "Booking Created!",
-        description: "Your booking has been created. Please complete payment to confirm."
+        description: "Redirecting to Paystack for payment...",
       });
 
-      setIsOpen(false);
-      setFormData({ guests: 1, guestName: '', guestEmail: '', guestPhone: '', specialRequests: '' });
-      setCheckInDate(undefined);
-      setCheckOutDate(undefined);
-      setErrors({});
+      window.location.href = paymentData.authorization_url;
     } catch (error) {
-      console.error('Error creating booking:', error);
+      console.error('Error:', error);
       toast({
-        title: "Booking Error",
-        description: "There was an error processing your booking. Please contact support.",
+        title: "Error",
+        description: "An error occurred. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -190,7 +216,154 @@ const BookingDialog = ({ room, children }: { room: any; children: React.ReactNod
             Book {room.name}
           </DialogTitle>
         </DialogHeader>
-        {/* Form content remains here */}
+
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="checkIn">Check-in Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button type="button" className={`w-full justify-start text-left font-normal border rounded-md px-4 py-2 bg-white ${errors.dates ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2`}>
+                        {checkInDate ? format(checkInDate, "PPP") : "Select date"}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={checkInDate}
+                        onSelect={(date) => setCheckInDate(date as Date)}
+                        disabled={(date) => date < new Date()}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div>
+                  <Label htmlFor="checkOut">Check-out Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button type="button" className={`w-full justify-start text-left font-normal border rounded-md px-4 py-2 bg-white ${errors.dates ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2`}>
+                        {checkOutDate ? format(checkOutDate, "PPP") : "Select date"}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={checkOutDate}
+                        onSelect={(date) => setCheckOutDate(date as Date)}
+                        disabled={(date) => !checkInDate || date <= checkInDate}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+              {errors.dates && <p className="text-sm text-red-500">{errors.dates}</p>}
+
+              <div>
+                <Label htmlFor="guests">Number of Guests</Label>
+                <Input
+                  id="guests"
+                  type="number"
+                  min="1"
+                  max={room.capacity}
+                  value={formData.guests}
+                  onChange={(e) => handleInputChange('guests', parseInt(e.target.value))}
+                  className={errors.guests ? 'border-red-500' : ''}
+                  required
+                />
+                {errors.guests && <p className="text-sm text-red-500">{errors.guests}</p>}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="guestName">Full Name *</Label>
+                  <Input
+                    id="guestName"
+                    value={formData.guestName}
+                    onChange={(e) => handleInputChange('guestName', e.target.value)}
+                    className={errors.guestName ? 'border-red-500' : ''}
+                    required
+                  />
+                  {errors.guestName && <p className="text-sm text-red-500">{errors.guestName}</p>}
+                </div>
+                <div>
+                  <Label htmlFor="guestEmail">Email Address *</Label>
+                  <Input
+                    id="guestEmail"
+                    type="email"
+                    value={formData.guestEmail}
+                    onChange={(e) => handleInputChange('guestEmail', e.target.value)}
+                    className={errors.guestEmail ? 'border-red-500' : ''}
+                    required
+                  />
+                  {errors.guestEmail && <p className="text-sm text-red-500">{errors.guestEmail}</p>}
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="guestPhone">Phone Number (Optional)</Label>
+                <Input
+                  id="guestPhone"
+                  type="tel"
+                  value={formData.guestPhone}
+                  onChange={(e) => handleInputChange('guestPhone', e.target.value)}
+                  placeholder="e.g., +254712345678 or 0712345678"
+                  className={errors.guestPhone ? 'border-red-500' : ''}
+                />
+                {errors.guestPhone && <p className="text-sm text-red-500">{errors.guestPhone}</p>}
+              </div>
+
+              <div>
+                <Label htmlFor="specialRequests">Special Requests</Label>
+                <Textarea
+                  id="specialRequests"
+                  value={formData.specialRequests}
+                  onChange={(e) => handleInputChange('specialRequests', e.target.value)}
+                  rows={3}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {calculateNights() > 0 && (
+                <div className="bg-hotel-cream p-4 rounded-lg">
+                  <h4 className="font-semibold text-hotel-navy mb-2">Booking Summary</h4>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span>Room:</span>
+                      <span>{room.name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Nights:</span>
+                      <span>{calculateNights()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Rate per night:</span>
+                      <span>KSh {(room.price_per_night / 100).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between font-semibold border-t pt-1">
+                      <span>Total:</span>
+                      <span>KSh {(calculateTotal() / 100).toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {isFormValid() && (
+                <Button
+                  className="w-full bg-hotel-gold text-white hover:bg-hotel-gold/90"
+                  onClick={handleBookingSuccess}
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Processing..." : "Confirm Booking & Pay with Paystack"}
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
