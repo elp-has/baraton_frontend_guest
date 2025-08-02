@@ -49,7 +49,10 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
     specialRequests: ''
   });
 
-  const API_BASE_URL = import.meta.env.VITE_RAILWAY_API_URL || '';
+  let API_BASE_URL = import.meta.env.VITE_RAILWAY_API_URL || '';
+  if (API_BASE_URL && !API_BASE_URL.startsWith('http')) {
+    API_BASE_URL = `https://${API_BASE_URL}`;
+  }
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -141,7 +144,7 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
         bookingPayload.lodging_id = room.id;
       }
 
-      const bookingRes = await fetch('/api/bookings', {
+      const bookingRes = await fetch(`${API_BASE_URL}/api/bookings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bookingPayload)
@@ -149,9 +152,8 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
       if (!bookingRes.ok) throw new Error('Failed to create booking');
       const bookingData = await bookingRes.json();
 
-      const paymentUrl = API_BASE_URL
-        ? `https://${API_BASE_URL.replace(/^https?:\/\//, '')}/api/payments/initiate`
-        : '/api/payments/initiate';
+      const paymentUrl = `${API_BASE_URL}/api/payments/initiate`;
+
 
       const paymentRes = await fetch(paymentUrl, {
         method: 'POST',
