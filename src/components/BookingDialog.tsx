@@ -5,17 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { CalendarDays, Users, Mail, Phone, User } from 'lucide-react';
-// ...existing code...
 import { useToast } from '@/hooks/use-toast';
-// ...existing code...
-import PaystackPayment from './PaystackPayment';
-// ...existing code...
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { validateEmail, validatePhone, sanitizeInput, validateAmount, validateGuestCount, validateDateRange } from '@/utils/security';
 
-// Define Room type locally since supabase/types is removed
 type Room = {
   id: string;
   name: string;
@@ -45,7 +40,7 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
   const [checkOutDate, setCheckOutDate] = useState<Date>();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
-  
+
   const [formData, setFormData] = useState({
     guests: 1,
     guestName: '',
@@ -54,44 +49,37 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
     specialRequests: ''
   });
 
-  // Get API base URL from .env (Vite only)
   const API_BASE_URL = import.meta.env.VITE_RAILWAY_API_URL || '';
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    // Validate dates
     if (!checkInDate || !checkOutDate) {
       newErrors.dates = 'Please select both check-in and check-out dates';
     } else if (!validateDateRange(checkInDate.toISOString().split('T')[0], checkOutDate.toISOString().split('T')[0])) {
       newErrors.dates = 'Invalid date range. Check-in must be today or later, check-out must be after check-in';
     }
 
-    // Validate guest name
     if (!formData.guestName.trim()) {
       newErrors.guestName = 'Guest name is required';
     } else if (formData.guestName.trim().length < 2) {
       newErrors.guestName = 'Guest name must be at least 2 characters';
     }
 
-    // Validate email
     if (!formData.guestEmail.trim()) {
       newErrors.guestEmail = 'Email address is required';
     } else if (!validateEmail(formData.guestEmail)) {
       newErrors.guestEmail = 'Please enter a valid email address';
     }
 
-    // Validate phone (optional but if provided, must be valid)
     if (formData.guestPhone && !validatePhone(formData.guestPhone)) {
       newErrors.guestPhone = 'Please enter a valid Kenyan phone number';
     }
 
-    // Validate guest count
     if (!validateGuestCount(formData.guests, room.capacity)) {
       newErrors.guests = `Number of guests must be between 1 and ${room.capacity}`;
     }
 
-    // Validate amount
     const totalAmount = calculateTotal();
     if (!validateAmount(totalAmount)) {
       newErrors.amount = 'Invalid booking amount';
@@ -108,9 +96,7 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
   };
 
   const calculateTotal = () => {
-    // Use price_per_hour for conference rooms, otherwise price_per_night
     if (room.type?.toLowerCase().includes('conference')) {
-      // For conference, assume 1 hour booking for now (customize as needed)
       return room.price_per_hour || room.price_per_night;
     }
     const nights = calculateNights();
@@ -122,14 +108,11 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
       ...prev,
       [field]: typeof value === 'string' ? sanitizeInput(value) : value
     }));
-
-    // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
   };
 
-  // Booking is created first, then payment is initiated with the booking id
   const handleBookingSuccess = async () => {
     if (!validateForm()) {
       toast({
@@ -143,12 +126,11 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
     setIsLoading(true);
     try {
       const totalAmount = calculateTotal();
-      // Map room type to lodging_id or conference_id
       const isConference = room.type?.toLowerCase().includes('conference');
       const bookingPayload: any = {
         start_date: checkInDate!.toISOString().split('T')[0],
         end_date: checkOutDate!.toISOString().split('T')[0],
-        reference: `ref_${Date.now()}_${Math.floor(Math.random()*10000)}`,
+        reference: `ref_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
         guests: formData.guests,
         guest_name: formData.guestName.trim(),
         guest_email: formData.guestEmail.toLowerCase().trim(),
@@ -160,7 +142,7 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
       } else {
         bookingPayload.lodging_id = room.id;
       }
-      // 1. Create booking first
+
       const bookingRes = await fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -169,42 +151,34 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
       if (!bookingRes.ok) throw new Error('Failed to create booking');
       const bookingData = await bookingRes.json();
 
-      // 2. Initiate payment with booking id
       const paymentUrl = API_BASE_URL
         ? `https://${API_BASE_URL.replace(/^https?:\/\//, '')}/api/payments/initiate`
         : '/api/payments/initiate';
+
       const paymentRes = await fetch(paymentUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           booking_id: bookingData.id,
-          amount: totalAmount, // amount in cents
+          amount: totalAmount,
           email: formData.guestEmail
         })
       });
+
       if (!paymentRes.ok) throw new Error('Failed to create payment');
+      const paymentData = await paymentRes.json();
 
       toast({
         title: "Booking Created!",
-        description: "Your booking has been created. Please complete payment to confirm.",
+        description: "Redirecting to Paystack for payment...",
       });
 
-      setIsOpen(false);
-      setFormData({
-        guests: 1,
-        guestName: '',
-        guestEmail: '',
-        guestPhone: '',
-        specialRequests: ''
-      });
-      setCheckInDate(undefined);
-      setCheckOutDate(undefined);
-      setErrors({});
+      window.location.href = paymentData.authorization_url;
     } catch (error) {
-      console.error('Error creating booking:', error);
+      console.error('Error:', error);
       toast({
-        title: "Booking Error",
-        description: "There was an error processing your booking. Please contact support.",
+        title: "Error",
+        description: "An error occurred. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -213,16 +187,16 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
   };
 
   const isFormValid = () => {
-    return checkInDate && 
-           checkOutDate && 
-           formData.guestName.trim() && 
-           validateEmail(formData.guestEmail) &&
-           calculateNights() > 0 &&
-           Object.keys(errors).length === 0;
+    return checkInDate &&
+      checkOutDate &&
+      formData.guestName.trim() &&
+      validateEmail(formData.guestEmail) &&
+      calculateNights() > 0 &&
+      Object.keys(errors).length === 0;
   };
 
   const bookingData = {
-    room_id: room.id, // Add room_id for database insertion
+    room_id: room.id,
     roomName: room.name,
     guestName: formData.guestName.trim(),
     guestEmail: formData.guestEmail.toLowerCase().trim(),
@@ -235,31 +209,23 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        {children}
-      </DialogTrigger>
+      <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold text-hotel-navy">
             Book {room.name}
           </DialogTitle>
         </DialogHeader>
-        
+
         <div className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="checkIn" className="flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4" />
-                    Check-in Date
-                  </Label>
+                  <Label htmlFor="checkIn">Check-in Date</Label>
                   <Popover>
-                    <PopoverTrigger>
-                      <button
-                        type="button"
-                        className={`w-full justify-start text-left font-normal border rounded-md px-4 py-2 bg-white ${errors.dates ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-hotel-gold`}
-                      >
+                    <PopoverTrigger asChild>
+                      <button type="button" className={`w-full justify-start text-left font-normal border rounded-md px-4 py-2 bg-white ${errors.dates ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2`}>
                         {checkInDate ? format(checkInDate, "PPP") : "Select date"}
                       </button>
                     </PopoverTrigger>
@@ -274,18 +240,11 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
                     </PopoverContent>
                   </Popover>
                 </div>
-                
                 <div>
-                  <Label htmlFor="checkOut" className="flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4" />
-                    Check-out Date
-                  </Label>
+                  <Label htmlFor="checkOut">Check-out Date</Label>
                   <Popover>
-                    <PopoverTrigger>
-                      <button
-                        type="button"
-                        className={`w-full justify-start text-left font-normal border rounded-md px-4 py-2 bg-white ${errors.dates ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-hotel-gold`}
-                      >
+                    <PopoverTrigger asChild>
+                      <button type="button" className={`w-full justify-start text-left font-normal border rounded-md px-4 py-2 bg-white ${errors.dates ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2`}>
                         {checkOutDate ? format(checkOutDate, "PPP") : "Select date"}
                       </button>
                     </PopoverTrigger>
@@ -304,10 +263,7 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
               {errors.dates && <p className="text-sm text-red-500">{errors.dates}</p>}
 
               <div>
-                <Label htmlFor="guests" className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Number of Guests
-                </Label>
+                <Label htmlFor="guests">Number of Guests</Label>
                 <Input
                   id="guests"
                   type="number"
@@ -323,10 +279,7 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="guestName" className="flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    Full Name *
-                  </Label>
+                  <Label htmlFor="guestName">Full Name *</Label>
                   <Input
                     id="guestName"
                     value={formData.guestName}
@@ -336,12 +289,8 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
                   />
                   {errors.guestName && <p className="text-sm text-red-500">{errors.guestName}</p>}
                 </div>
-                
                 <div>
-                  <Label htmlFor="guestEmail" className="flex items-center gap-2">
-                    <Mail className="h-4 w-4" />
-                    Email Address *
-                  </Label>
+                  <Label htmlFor="guestEmail">Email Address *</Label>
                   <Input
                     id="guestEmail"
                     type="email"
@@ -355,10 +304,7 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
               </div>
 
               <div>
-                <Label htmlFor="guestPhone" className="flex items-center gap-2">
-                  <Phone className="h-4 w-4" />
-                  Phone Number (Optional)
-                </Label>
+                <Label htmlFor="guestPhone">Phone Number (Optional)</Label>
                 <Input
                   id="guestPhone"
                   type="tel"
@@ -371,12 +317,11 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
               </div>
 
               <div>
-                <Label htmlFor="specialRequests">Special Requests (Optional)</Label>
+                <Label htmlFor="specialRequests">Special Requests</Label>
                 <Textarea
                   id="specialRequests"
                   value={formData.specialRequests}
                   onChange={(e) => handleInputChange('specialRequests', e.target.value)}
-                  placeholder="Any special requirements or requests..."
                   rows={3}
                 />
               </div>
@@ -408,13 +353,13 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
               )}
 
               {isFormValid() && (
-                <PaystackPayment
-                  amount={calculateTotal()}
-                  email={formData.guestEmail}
-                  bookingData={bookingData}
-                  onSuccess={handleBookingSuccess}
+                <Button
+                  className="w-full bg-hotel-gold text-white hover:bg-hotel-gold/90"
+                  onClick={handleBookingSuccess}
                   disabled={isLoading}
-                />
+                >
+                  {isLoading ? "Processing..." : "Confirm Booking & Pay with Paystack"}
+                </Button>
               )}
             </div>
           </div>
