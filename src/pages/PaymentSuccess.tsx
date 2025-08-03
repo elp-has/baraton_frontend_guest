@@ -1,12 +1,42 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CheckCircle } from 'lucide-react';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
+import axios from 'axios';
 
 const PaymentSuccess = () => {
+  const [searchParams] = useSearchParams();
+  const reference = searchParams.get('reference');
+
+  const [booking, setBooking] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!reference) {
+      setError('No reference provided');
+      setLoading(false);
+      return;
+    }
+
+    const fetchBooking = async () => {
+      try {
+        const res = await axios.get(`/api/bookings/by-reference/${reference}`);
+        setBooking(res.data.booking);
+      } catch (err) {
+        setError('Booking not found or failed to load');
+        console.error('Error fetching booking by reference:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBooking();
+  }, [reference]);
+
   return (
     <div className="min-h-screen">
       <Navigation />
@@ -23,8 +53,22 @@ const PaymentSuccess = () => {
               </p>
             </CardHeader>
 
-            <CardContent className="space-y-6">
-              <div className="flex gap-3 justify-center">
+            <CardContent className="space-y-4">
+              {loading && <p>Loading booking details...</p>}
+              {error && <p className="text-red-500">{error}</p>}
+              {booking && (
+                <div className="text-left text-sm text-gray-700 space-y-1">
+                  <p><strong>Guest:</strong> {booking.guest_name}</p>
+                  <p><strong>Email:</strong> {booking.guest_email}</p>
+                  <p><strong>Phone:</strong> {booking.guest_phone}</p>
+                  <p><strong>Status:</strong> {booking.status}</p>
+                  <p><strong>Check-in:</strong> {new Date(booking.start_date).toLocaleDateString()}</p>
+                  <p><strong>Check-out:</strong> {new Date(booking.end_date).toLocaleDateString()}</p>
+                  <p><strong>Reference:</strong> {booking.reference}</p>
+                </div>
+              )}
+
+              <div className="flex gap-3 justify-center pt-4">
                 <Button asChild>
                   <Link to="/bookings">View My Bookings</Link>
                 </Button>
