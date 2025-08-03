@@ -1,50 +1,24 @@
-
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, Calendar, Users, Mail, Phone, User } from 'lucide-react';
-import axios from 'axios';
-import { config } from '@/config/environment';
-import { useQueryClient } from '@tanstack/react-query';
+import { CheckCircle } from 'lucide-react';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 
 const PaymentSuccess = () => {
   const [searchParams] = useSearchParams();
-  const [booking, setBooking] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const queryClient = useQueryClient();
   const reference = searchParams.get('reference');
 
   useEffect(() => {
-    const fetchBookingDetails = async () => {
-      if (!reference) {
-        setLoading(false);
-        return;
-      }
-      try {
-        // Call backend to verify payment and get booking details (use route param)
-        const res = await axios.get(`${config.railway.url}/api/payments/verify/${encodeURIComponent(reference)}`);
-        const data = res.data;
-        if (data && data.booking) {
-          setBooking(data.booking);
-          // Invalidate room availability queries to trigger refetch
-          queryClient.invalidateQueries({ queryKey: ['room-availability'] });
-          queryClient.invalidateQueries({ queryKey: ['rooms'] });
-          queryClient.invalidateQueries({ queryKey: ['user-bookings'] });
-        } else {
-          setBooking(null);
-        }
-      } catch (error) {
-        setBooking(null);
-      } finally {
-        setLoading(false);
-      }
-    };
+    // Simulate a short loading period
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 3000);
 
-    fetchBookingDetails();
-  }, [reference, queryClient]);
+    return () => clearTimeout(timer);
+  }, []);
 
   if (loading) {
     return (
@@ -73,95 +47,26 @@ const PaymentSuccess = () => {
               </div>
               <CardTitle className="text-2xl text-green-600">Payment Successful!</CardTitle>
               <p className="text-gray-600 mt-2">
-                Thank you for your booking. Your reservation has been confirmed.
+                Thank you for your payment. We are now processing your booking.
               </p>
             </CardHeader>
-            
-            {booking && (
-              <CardContent className="space-y-6">
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="font-semibold text-lg mb-4">Booking Details</h3>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-hotel-gold" />
-                      <div>
-                        <p className="text-gray-600">Check-in</p>
-                        <p className="font-semibold">{new Date(booking.check_in_date).toLocaleDateString()}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-hotel-gold" />
-                      <div>
-                        <p className="text-gray-600">Check-out</p>
-                        <p className="font-semibold">{new Date(booking.check_out_date).toLocaleDateString()}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-hotel-gold" />
-                      <div>
-                        <p className="text-gray-600">Guests</p>
-                        <p className="font-semibold">{booking.guests}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-hotel-gold" />
-                      <div>
-                        <p className="text-gray-600">Room</p>
-                        <p className="font-semibold">{booking.rooms?.name}</p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-4 pt-4 border-t">
-                    <div className="flex justify-between items-center">
-                      <span className="font-semibold">Total Amount:</span>
-                      <span className="font-bold text-lg">KSh {booking.total_amount?.toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h4 className="font-semibold mb-2">Guest Information</h4>
-                  <div className="space-y-1 text-sm">
-                    <p><span className="text-gray-600">Name:</span> {booking.guest_name}</p>
-                    <p><span className="text-gray-600">Email:</span> {booking.guest_email}</p>
-                    {booking.guest_phone && (
-                      <p><span className="text-gray-600">Phone:</span> {booking.guest_phone}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <p className="text-sm text-gray-600">
-                    A confirmation email has been sent to {booking.guest_email}
-                  </p>
-                  
-                  <div className="flex gap-3">
-                    <Button asChild className="flex-1">
-                      <Link to="/bookings">View My Bookings</Link>
-                    </Button>
-                    <Button variant="outline" asChild className="flex-1">
-                      <Link to="/">Return Home</Link>
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            )}
-
-            {!booking && (
-              <CardContent>
-                <p className="text-gray-600 mb-4">
-                  We're processing your booking. Please check your email for confirmation.
-                </p>
+            <CardContent className="space-y-6">
+              <p className="text-gray-700">
+                You will receive a confirmation email shortly once your booking is finalized.
+              </p>
+              <p className="text-sm text-gray-500">
+                Reference: <span className="font-mono text-black">{reference}</span>
+              </p>
+              <div className="flex gap-3 justify-center">
                 <Button asChild>
+                  <Link to="/bookings">View My Bookings</Link>
+                </Button>
+                <Button variant="outline" asChild>
                   <Link to="/">Return Home</Link>
                 </Button>
-              </CardContent>
-            )}
+              </div>
+            </CardContent>
           </Card>
         </div>
       </div>
