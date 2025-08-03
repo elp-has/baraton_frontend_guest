@@ -103,7 +103,7 @@ const ConferenceRoomShowcase = () => {
             Host your meetings, seminars, and events in our modern, flexible conference rooms.
           </p>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {conferenceRooms.length === 0 ? (
             <div className="col-span-full text-center text-gray-500 py-8">
               No conference rooms are currently available. Please check back later.
@@ -114,10 +114,10 @@ const ConferenceRoomShowcase = () => {
                 <RoomImageCarousel 
                   images={room.image_urls.map((url, idx) => ({ id: `${room.id}-img-${idx}`, image_url: url, display_order: idx, is_primary: idx === 0 }))}
                   fallbackImageUrl={room.image_urls[0] || "https://images.unsplash.com/photo-1515378791036-0648a3ef77b2?w=500&h=300&fit=crop"}
-                  className="h-40 md:h-48 lg:h-40"
+                  className="w-full h-44 md:h-52 lg:h-44 object-cover rounded-t-lg overflow-hidden"
                 />
                 <Badge className="absolute top-2 right-2 bg-hotel-gold text-hotel-navy font-semibold text-xs px-2 py-1">
-                  KSh {(room.price / 100).toLocaleString()}/hour
+                  KSh {room.price?.toLocaleString()}/hour
                 </Badge>
               </div>
               <CardContent className="p-3">
@@ -134,14 +134,15 @@ const ConferenceRoomShowcase = () => {
                   </div>
                 </div>
                 <p className="text-gray-600 mb-2 mt-2 text-xs line-clamp-2">{room.description}</p>
-                <div className="grid grid-cols-2 gap-1 mb-3">
-                  {room.amenities?.slice(0, 4).map((amenity, i) => (
-                    <div key={i} className="flex items-center text-xs text-gray-600">
-                      <div className="w-2 h-2 bg-hotel-gold rounded-full mr-2"></div>
-                      {amenity}
-                    </div>
-                  ))}
-                </div>
+                {room.amenities && room.amenities.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3 max-h-16 overflow-y-auto">
+                    {room.amenities.map((amenity, i) => (
+                      <span key={i} className="flex items-center bg-hotel-gold/10 text-hotel-gold px-2 py-1 rounded-full text-xs whitespace-nowrap">
+                        <span className="w-2 h-2 bg-hotel-gold rounded-full mr-2"></span>{amenity}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div className="flex space-x-1 mb-3">
                   <Wifi className="h-4 w-4 text-hotel-gold" />
                   <Tv className="h-4 w-4 text-hotel-gold" />

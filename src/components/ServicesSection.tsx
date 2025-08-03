@@ -22,14 +22,132 @@ import { useQuery } from '@tanstack/react-query';
 // ...existing code...
 
 const ServicesSection = () => {
-  const { data: services, isLoading } = useQuery({
-    queryKey: ['services'],
-    queryFn: async () => {
-      const axios = (await import('axios')).default;
-      const res = await axios.get('/api/services');
-      return res.data;
-    }
-  });
+
+  // Fallback: World-class services available at a fee (and some complimentary)
+  const fallbackServices = [
+    {
+      id: 1,
+      name: '24/7 Room Service',
+      description: 'Enjoy delicious meals and snacks delivered to your room any time, day or night.',
+      category: 'Dining',
+      price: 500,
+    },
+    {
+      id: 2,
+      name: 'High-Speed Wi-Fi',
+      description: 'Stay connected with complimentary high-speed internet access throughout the hotel.',
+      category: 'Business',
+      price: null,
+    },
+    {
+      id: 3,
+      name: 'Airport Transfers',
+      description: 'Convenient airport pick-up and drop-off services for a seamless travel experience.',
+      category: 'Transportation',
+      price: 3000,
+    },
+    {
+      id: 4,
+      name: 'Laundry & Dry Cleaning',
+      description: 'Professional laundry and dry cleaning services for your convenience.',
+      category: 'Housekeeping',
+      price: 800,
+    },
+    {
+      id: 5,
+      name: 'Fitness Center',
+      description: 'Access our state-of-the-art gym facilities to keep up with your fitness routine.',
+      category: 'Fitness',
+      price: null,
+    },
+    {
+      id: 6,
+      name: 'Spa & Wellness',
+      description: 'Relax and rejuvenate with massages, facials, and wellness treatments.',
+      category: 'Wellness',
+      price: 3500,
+    },
+    {
+      id: 7,
+      name: 'Swimming Pool',
+      description: 'Take a dip in our outdoor pool, perfect for relaxation and fun.',
+      category: 'Recreation',
+      price: null,
+    },
+    {
+      id: 8,
+      name: 'Concierge Services',
+      description: 'Our concierge is available to assist with reservations, recommendations, and more.',
+      category: 'Guest Services',
+      price: null,
+    },
+    {
+      id: 9,
+      name: 'Business Center',
+      description: 'Fully equipped business center with printing, copying, and meeting rooms.',
+      category: 'Business',
+      price: 1000,
+    },
+    {
+      id: 10,
+      name: 'Valet Parking',
+      description: 'Secure valet parking for your vehicle during your stay.',
+      category: 'Transportation',
+      price: 700,
+    },
+    {
+      id: 11,
+      name: 'Event & Conference Planning',
+      description: 'Professional planning and support for your meetings, conferences, and events.',
+      category: 'Business',
+      price: 5000,
+    },
+    {
+      id: 12,
+      name: 'Daily Housekeeping',
+      description: 'Enjoy a clean and comfortable room with our daily housekeeping service.',
+      category: 'Housekeeping',
+      price: null,
+    },
+    {
+      id: 13,
+      name: 'In-Room Entertainment',
+      description: 'Smart TVs with streaming services and international channels.',
+      category: 'Recreation',
+      price: null,
+    },
+    {
+      id: 14,
+      name: 'Onsite Restaurant & Bar',
+      description: 'Dine at our gourmet restaurant and enjoy drinks at the stylish bar.',
+      category: 'Dining',
+      price: null,
+    },
+    {
+      id: 15,
+      name: 'Childcare & Babysitting',
+      description: 'Qualified staff available to care for your children while you relax.',
+      category: 'Family',
+      price: 2000,
+    },
+    {
+      id: 16,
+      name: 'Luggage Storage',
+      description: 'Complimentary luggage storage before check-in or after check-out.',
+      category: 'Guest Services',
+      price: null,
+    },
+    {
+      id: 17,
+      name: '24/7 Security',
+      description: 'Your safety is our priority with round-the-clock security services.',
+      category: 'Security',
+      price: null,
+    },
+  ];
+
+  const services = fallbackServices;
+  const isLoading = false;
 
   const getServiceIcon = (serviceName: string, category: string) => {
     const name = serviceName.toLowerCase();
