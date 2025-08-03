@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 
 import PaymentSuccess from "./pages/PaymentSuccess";
 import NotFound from "./pages/NotFound";
+import BookingByReference from "./pages/Bookings";
 
 const queryClient = new QueryClient();
 
@@ -20,6 +21,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/payment-success" element={<PaymentSuccess />} />
+          <Route path="/booking/:reference" element={<BookingByReference />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

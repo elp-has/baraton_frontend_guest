@@ -1,27 +1,25 @@
-
-import React, { useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import React from 'react';
+import { useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, Users, MapPin, Clock } from 'lucide-react';
+import { CalendarDays, Users, Clock } from 'lucide-react';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import { config } from '@/config/environment';
 
-const Bookings = () => {
-  const queryClient = useQueryClient();
-  
-  const { data: bookings, isLoading } = useQuery({
-    queryKey: ['user-bookings'],
-    queryFn: async () => {
-      // Fetch bookings from backend
-      const res = await axios.get(`${config.railway.url}/api/bookings`);
-      return res.data;
-    }
-  });
+const BookingByReference = () => {
+  const { reference } = useParams();
 
-  // Real-time subscription removed; backend does not support real-time updates
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['booking', reference],
+    queryFn: async () => {
+      const res = await axios.get(`${config.railway.url}/api/bookings/by-reference/${reference}`);
+      return res.data.booking;
+    },
+    enabled: !!reference,
+  });
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -34,103 +32,75 @@ const Bookings = () => {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen">
-        <Navigation />
-        <div className="container mx-auto px-4 py-20">
-          <h1 className="text-4xl font-bold text-hotel-navy mb-8">Your Bookings</h1>
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-gray-200 animate-pulse h-48 rounded-lg"></div>
-            ))}
-          </div>
-        </div>
-        <Footer />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen">
       <Navigation />
       <div className="container mx-auto px-4 py-20">
-        <h1 className="text-4xl font-bold text-hotel-navy mb-8">Your Bookings</h1>
-        
-        {bookings && bookings.length === 0 ? (
+        <h1 className="text-4xl font-bold text-hotel-navy mb-8">Booking Details</h1>
+
+        {isLoading && <p>Loading booking details...</p>}
+        {isError && <p className="text-red-500">Error loading booking. Please try again later.</p>}
+
+        {!isLoading && data && (
           <Card>
-            <CardContent className="p-8 text-center">
-              <CalendarDays className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-600 mb-2">No bookings yet</h3>
-              <p className="text-gray-500">When you make a booking, it will appear here.</p>
+            <CardHeader className="pb-3">
+              <div className="flex justify-between items-start">
+                <CardTitle className="text-xl">{data?.Lodging?.name || 'Lodging'}</CardTitle>
+                <Badge className={`${getStatusColor(data.status)} text-white`}>
+                  {data.status?.toUpperCase()}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4 text-hotel-gold" />
+                  <div>
+                    <p className="text-sm text-gray-600">Check-in</p>
+                    <p className="font-semibold">{new Date(data.start_date).toLocaleDateString()}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4 text-hotel-gold" />
+                  <div>
+                    <p className="text-sm text-gray-600">Check-out</p>
+                    <p className="font-semibold">{new Date(data.end_date).toLocaleDateString()}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-hotel-gold" />
+                  <div>
+                    <p className="text-sm text-gray-600">Guests</p>
+                    <p className="font-semibold">{data.guests}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-hotel-gold" />
+                  <div>
+                    <p className="text-sm text-gray-600">Booking Reference</p>
+                    <p className="font-semibold">{data.reference}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <h4 className="font-semibold mb-2">Guest Information</h4>
+                <p><span className="text-gray-600">Name:</span> {data.guest_name}</p>
+                <p><span className="text-gray-600">Email:</span> {data.guest_email}</p>
+                {data.guest_phone && <p><span className="text-gray-600">Phone:</span> {data.guest_phone}</p>}
+                {data.special_requests && (
+                  <div className="mt-2">
+                    <p className="text-gray-600">Special Requests:</p>
+                    <p className="italic">{data.special_requests}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 text-sm text-gray-500">
+                Booking created: {new Date(data.createdAt).toLocaleString()}
+              </div>
             </CardContent>
           </Card>
-        ) : (
-          <div className="space-y-6">
-            {bookings?.map((booking) => (
-              <Card key={booking.id} className="overflow-hidden">
-                <CardHeader className="pb-3">
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-xl">{booking.rooms?.name}</CardTitle>
-                    <Badge className={`${getStatusColor(booking.status || 'pending')} text-white`}>
-                      {booking.status?.toUpperCase()}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                    <div className="flex items-center gap-2">
-                      <CalendarDays className="h-4 w-4 text-hotel-gold" />
-                      <div>
-                        <p className="text-sm text-gray-600">Check-in</p>
-                        <p className="font-semibold">{new Date(booking.check_in_date).toLocaleDateString()}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <CalendarDays className="h-4 w-4 text-hotel-gold" />
-                      <div>
-                        <p className="text-sm text-gray-600">Check-out</p>
-                        <p className="font-semibold">{new Date(booking.check_out_date).toLocaleDateString()}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-hotel-gold" />
-                      <div>
-                        <p className="text-sm text-gray-600">Guests</p>
-                        <p className="font-semibold">{booking.guests}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-hotel-gold" />
-                      <div>
-                        <p className="text-sm text-gray-600">Total</p>
-                        <p className="font-semibold">KSh {booking.total_amount?.toLocaleString()}</p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="border-t pt-4">
-                    <h4 className="font-semibold mb-2">Guest Information</h4>
-                    <p><span className="text-gray-600">Name:</span> {booking.guest_name}</p>
-                    <p><span className="text-gray-600">Email:</span> {booking.guest_email}</p>
-                    {booking.guest_phone && (
-                      <p><span className="text-gray-600">Phone:</span> {booking.guest_phone}</p>
-                    )}
-                    {booking.special_requests && (
-                      <div className="mt-2">
-                        <p className="text-gray-600">Special Requests:</p>
-                        <p className="italic">{booking.special_requests}</p>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="mt-4 text-sm text-gray-500">
-                    Booking created: {new Date(booking.created_at).toLocaleString()}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
         )}
       </div>
       <Footer />
@@ -138,4 +108,4 @@ const Bookings = () => {
   );
 };
 
-export default Bookings;
+export default BookingByReference;
