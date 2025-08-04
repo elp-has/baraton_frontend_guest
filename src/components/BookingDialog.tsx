@@ -333,20 +333,18 @@ const BookingDialog = ({ room, children }: BookingDialogProps) => {
                   <h4 className="font-semibold text-hotel-navy mb-2">Booking Summary</h4>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
-                      <span>Room:</span>
-                      <span>{room.name}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Nights:</span>
-                      <span>{calculateNights()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Rate per night:</span>
-                      <span>KSh {(room.price_per_night / 100).toLocaleString()}</span>
+                      <span>Rate:</span>
+                      <span>KSh {room.type?.toLowerCase().includes('conference')
+                        ? (room.price_per_hour ?? room.price_per_night)
+                        : (room.price_per_night / 100).toLocaleString()
+                      }</span>
                     </div>
                     <div className="flex justify-between font-semibold border-t pt-1">
                       <span>Total:</span>
-                      <span>KSh {(calculateTotal() / 100).toLocaleString()}</span>
+                      <span>KSh {room.type?.toLowerCase().includes('conference')
+                        ? calculateTotal().toLocaleString()
+                        : (calculateTotal() / 100).toLocaleString()
+                      }</span>
                     </div>
                   </div>
                 </div>

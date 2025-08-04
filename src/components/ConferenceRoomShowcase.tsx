@@ -53,6 +53,11 @@ const ConferenceRoomShowcase = () => {
       }))
     : [];
 
+  // Log the normalized conference rooms for debugging
+  if (conferenceRooms.length > 0) {
+    console.log('Normalized conference rooms:', conferenceRooms);
+  }
+
   if (isLoading) {
     return (
       <section className="py-20 bg-gray-50">
