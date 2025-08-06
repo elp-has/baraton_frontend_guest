@@ -1,24 +1,20 @@
-
-
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Wifi, Tv, Coffee, Car, Users, Bed } from 'lucide-react';
+import { Wifi, Tv, Coffee, Car, Users } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-
-// Get API base URL from .env (Vite only)
-const API_BASE_URL = import.meta.env.VITE_RAILWAY_API_URL || '';
-
-import BookingDialog from './BookingDialog';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
+import ConferenceBookingForm from './ConferenceBookingForm';
 import RoomImageCarousel from './RoomImageCarousel';
+
+const API_BASE_URL = import.meta.env.VITE_RAILWAY_API_URL || '';
 
 const ConferenceRoomShowcase = () => {
   const queryClient = useQueryClient();
   const { data: conferenceRoomsRaw, isLoading, error } = useQuery({
     queryKey: ['conference-rooms'],
     queryFn: async () => {
-      // Always use the backend API URL from .env (VITE_RAILWAY_API_URL)
       if (!API_BASE_URL) {
         throw new Error('API base URL is not set. Please set VITE_RAILWAY_API_URL in your .env file and restart the dev server.');
       }
@@ -37,7 +33,7 @@ const ConferenceRoomShowcase = () => {
       return res.data;
     }
   });
-  // Normalize conference room data
+
   const conferenceRooms = Array.isArray(conferenceRoomsRaw)
     ? conferenceRoomsRaw.map((room) => ({
         id: room.id,
@@ -53,7 +49,6 @@ const ConferenceRoomShowcase = () => {
       }))
     : [];
 
-  // Log the normalized conference rooms for debugging
   if (conferenceRooms.length > 0) {
     console.log('Normalized conference rooms:', conferenceRooms);
   }
@@ -154,26 +149,16 @@ const ConferenceRoomShowcase = () => {
                   <Coffee className="h-4 w-4 text-hotel-gold" />
                   <Car className="h-4 w-4 text-hotel-gold" />
                 </div>
-                <BookingDialog room={{
-                  id: String(room.id),
-                  name: room.name,
-                  type: 'conference',
-                  description: room.description || '',
-                  price_per_night: room.price, // for compatibility
-                  price_per_hour: room.price,
-                  image_url: room.image_urls[0] || '',
-                  amenities: room.amenities,
-                  capacity: room.max_users,
-                  size_sqm: room.size,
-                  created_at: room.created_at,
-                  updated_at: room.updated_at,
-                  is_available: true,
-                  room_number: undefined,
-                }}>
-                  <Button className="w-full bg-hotel-navy hover:bg-hotel-charcoal text-white py-2 rounded-lg text-xs transition-all duration-300">
-                    Book Conference Room
-                  </Button>
-                </BookingDialog>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button className="w-full bg-hotel-navy hover:bg-hotel-charcoal text-white py-2 rounded-lg text-xs transition-all duration-300">
+                      Book Conference Room
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <ConferenceBookingForm conferenceId={room.id} roomName={room.name} />
+                  </DialogContent>
+                </Dialog>
               </CardContent>
             </Card>
           ))}

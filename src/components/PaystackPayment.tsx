@@ -39,14 +39,15 @@ const PaystackPayment = ({ amount, email, bookingData, onSuccess, disabled }: Pa
       return false;
     }
 
-    if (!bookingData?.roomName || !bookingData?.room_id) {
+    if (!bookingData?.room_id) {
       toast({
         title: "Booking Error",
-        description: "Room information is missing. Please try again.",
+        description: "Booking reference is missing. Please try again.",
         variant: "destructive",
       });
       return false;
     }
+
 
     return true;
   };
